@@ -398,6 +398,31 @@ defmodule AshBackpex.LiveResource.Dsl do
         """,
         type: {:or, [:mod_arg, :atom, {:list, {:or, [:mod_arg, :atom]}}]},
         required: false
+      ],
+      item_query: [
+        doc: """
+        A function to modify the Ash query before items are fetched. Useful for scoping
+        resources based on URL parameters or other criteria.
+
+        The function receives:
+        - `query` - The `Ash.Query.t()`
+        - `live_action` - The current live action (`:index`, `:show`, `:edit`, `:new`)
+        - `assigns` - The socket assigns
+
+        It should return an `Ash.Query.t()`.
+
+        Example:
+        ```elixir
+        item_query fn query, _live_action, assigns ->
+          case assigns[:mailhosting] do
+            nil -> query
+            mailhosting -> Ash.Query.filter(query, mailhosting_id == ^mailhosting.id)
+          end
+        end
+        ```
+        """,
+        type: {:fun, 3},
+        required: false
       ]
     ],
     sections: [@fields, @filters, @item_actions]

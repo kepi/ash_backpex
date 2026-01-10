@@ -348,7 +348,8 @@ defmodule AshBackpex.LiveResource.Transformers.GenerateBackpex do
                     case Spark.Dsl.Extension.get_opt(__MODULE__, [:backpex], :load) do
                       nil -> &AshBackpex.Adapter.load/3
                       some_loads -> &__MODULE__.load/3
-                    end
+                    end,
+                  item_query: Spark.Dsl.Extension.get_opt(__MODULE__, [:backpex], :item_query)
                 ]
                 |> Keyword.reject(&(&1 |> elem(1) |> is_nil)),
               primary_key: primary_key.(),

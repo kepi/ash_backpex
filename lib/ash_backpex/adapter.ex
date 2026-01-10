@@ -68,6 +68,21 @@ defmodule AshBackpex.Adapter do
       type: {:fun, 3},
       default: &__MODULE__.load/3
     ],
+    item_query: [
+      doc: """
+      A function to modify the Ash query before items are fetched. Useful for scoping
+      resources based on URL parameters or other criteria.
+
+      The function receives:
+      - `query` - The `Ash.Query.t()`
+      - `live_action` - The current live action (`:index`, `:show`, `:edit`, `:new`)
+      - `assigns` - The socket assigns
+
+      It should return an `Ash.Query.t()`.
+      """,
+      type: {:fun, 3},
+      default: &__MODULE__.default_item_query/3
+    ],
     init_order: [
       doc: """
       You can configure the ordering of the resource index page. By default, the resources are ordered by the primary key field in ascending order.
@@ -127,6 +142,8 @@ defmodule AshBackpex.Adapter do
 
   def load(_, _, _), do: []
 
+  def default_item_query(query, _live_action, _assigns), do: query
+
   def create_changeset(item, params, assigns) do
     live_resource = Keyword.get(assigns, :assigns).live_resource
 
@@ -167,7 +184,11 @@ defmodule AshBackpex.Adapter do
 
     {load, select} = LoadSelectResolver.resolve(config[:resource], fields)
 
+    item_query_fn = Keyword.get(config, :item_query, &default_item_query/3)
+
     config[:resource]
+    |> Ash.Query.new()
+    |> item_query_fn.(assigns.live_action, assigns)
     |> Ash.Query.filter(^Ash.Expr.ref(primary_key) == ^primary_value)
     |> Ash.Query.select(select)
     |> Ash.Query.load(default_loads ++ load)
@@ -195,12 +216,14 @@ defmodule AshBackpex.Adapter do
       end
 
     {load, select} = LoadSelectResolver.resolve(config[:resource], fields)
+    item_query_fn = Keyword.get(config, :item_query, &default_item_query/3)
 
     %{size: page_size, page: page_num} = Keyword.get(criteria, :pagination, %{size: 15, page: 1})
 
     query =
       config[:resource]
       |> Ash.Query.new()
+      |> item_query_fn.(assigns.live_action, assigns)
       |> apply_filters(Keyword.get(criteria, :filters))
       |> BasicSearch.apply(Map.get(assigns, :params), live_resource)
       |> Ash.Query.sort(resolve_sort(assigns, live_resource.config(:init_order)))
@@ -208,7 +231,9 @@ defmodule AshBackpex.Adapter do
       |> Ash.Query.select(select)
       |> Ash.Query.load(default_loads ++ load)
 
-    with {:ok, %{results: results}} <- query |> Ash.read(actor: assigns.current_user) do
+    result = query |> Ash.read(actor: assigns.current_user)
+
+    with {:ok, %{results: results}} <- result do
       {:ok, results}
     end
   end
@@ -220,9 +245,11 @@ defmodule AshBackpex.Adapter do
   @spec count(keyword(), keyword(), map(), module()) :: {:ok, list(map())} | {:error, term()}
   def count(criteria, _fields, assigns, live_resource) do
     config = live_resource.config(:adapter_config)
+    item_query_fn = Keyword.get(config, :item_query, &default_item_query/3)
 
     config[:resource]
     |> Ash.Query.new()
+    |> item_query_fn.(assigns.live_action, assigns)
     |> apply_filters(Keyword.get(criteria, :filters))
     |> Ash.count(actor: assigns.current_user)
   end
